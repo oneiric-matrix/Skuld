@@ -1,0 +1,83 @@
+name: Branch Verification & Gatekeeper
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate-branching:
+    name: Enforce Branching Strategy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Source and Target Branches
+        run: |
+          TARGET="${{ github.base_ref }}"
+          SOURCE="${{ github.head_ref }}"
+
+          echo "=========================================="
+          echo "Evaluating PR from '$SOURCE' -> '$TARGET'"
+          echo "=========================================="
+
+          # 1. Target: unit (Only dev/* allowed)
+          if [ "$TARGET" = "unit" ]; then
+            if [[ ! "$SOURCE" =~ ^dev/ ]]; then
+              echo "❌ Error: Only 'dev/*' branches are allowed to merge into 'unit'."
+              echo "Source branch was: '$SOURCE'"
+              exit 1
+            fi
+            echo "✅ Target 'unit' received change from allowed 'dev/*' branch."
+            exit 0
+          fi
+
+          # 2. Target: quality (Only unit allowed)
+          if [ "$TARGET" = "quality" ]; then
+            if [ "$SOURCE" != "unit" ]; then
+              echo "❌ Error: Only 'unit' branch is allowed to merge into 'quality'."
+              echo "Source branch was: '$SOURCE'"
+              exit 1
+            fi
+            echo "✅ Target 'quality' received change from 'unit'."
+            exit 0
+          fi
+
+          # 3. Target: integration (Only quality allowed)
+          if [ "$TARGET" = "integration" ]; then
+            if [ "$SOURCE" != "quality" ]; then
+              echo "❌ Error: Only 'quality' branch is allowed to merge into 'integration'."
+              echo "Source branch was: '$SOURCE'"
+              exit 1
+            fi
+            echo "✅ Target 'integration' received change from 'quality'."
+            exit 0
+          fi
+
+          # 4. Target: nightly (Only integration allowed)
+          if [ "$TARGET" = "nightly" ]; then
+            if [ "$SOURCE" != "integration" ]; then
+              echo "❌ Error: Only 'integration' branch is allowed to merge into 'nightly'."
+              echo "Source branch was: '$SOURCE'"
+              exit 1
+            fi
+            echo "✅ Target 'nightly' received change from 'integration'."
+            exit 0
+          fi
+
+          # 5. Target: main (Only nightly allowed)
+          if [ "$TARGET" = "main" ]; then
+            if [ "$SOURCE" != "nightly" ]; then
+              echo "❌ Error: Only 'nightly' branch is allowed to merge into 'main'."
+              echo "Source branch was: '$SOURCE'"
+              exit 1
+            fi
+            echo "✅ Target 'main' received change from 'nightly'."
+            exit 0
+          fi
+
+          # 6. dev/* branches cannot target anything else
+          if [[ "$SOURCE" =~ ^dev/ ]]; then
+            echo "❌ Error: 'dev/*' branches can only be merged into 'unit', not '$TARGET'."
+            exit 1
+          fi
+
+          echo "❌ Error: Invalid PR target '$TARGET'. Allowed pipeline: dev/* -> unit -> quality -> integration -> nightly -> main"
+          exit 1

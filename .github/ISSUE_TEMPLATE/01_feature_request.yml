@@ -1,0 +1,46 @@
+name: Feature / New Requirement
+description: Propose a new requirement or feature (clarified iteratively before final issue logging)
+title: "[Gen][FEATURE]: "
+labels: ["enhancement", "triaging"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 📋 New Requirement Workflow
+        > **Rule**: New requirements must be iteratively clarified with questions until 100% clear before an implementation plan is logged.
+  - type: textarea
+    id: clarified-summary
+    attributes:
+      label: Clarified Requirement Summary
+      description: Concise summary of what is being requested after iterative clarification.
+      placeholder: Describe the finalized requirement...
+    validations:
+      required: true
+  - type: textarea
+    id: problem-context
+    attributes:
+      label: Motivation & Context
+      description: What user problem, business goal, or architectural need does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: implementation-plan
+    attributes:
+      label: Implementation Plan
+      description: Step-by-step breakdown of how this requirement will be implemented.
+      placeholder: |
+        1. Step 1...
+        2. Step 2...
+        3. Step 3...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How do we verify this requirement is satisfied?
+      placeholder: |
+        - [ ] Behavior A meets spec
+        - [ ] Automated tests pass
+    validations:
+      required: true
