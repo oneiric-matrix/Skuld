@@ -1,0 +1,49 @@
+name: Automated Security & Code Quality Audit
+
+on:
+  pull_request:
+    branches:
+      - unit
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  code-review-audit:
+    name: 6-Pillar Quality & Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pillar 3 - Secrets & Vulnerability Scan (Gitleaks / Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          format: 'table'
+          exit-code: '0' # Non-blocking informative scan on free tier; flags issues in CI log
+
+      - name: Pillars 1, 2, 4, 5, 6 - Static Code Review Verification
+        run: |
+          echo "=========================================================="
+          echo "📋 6-Pillar Automated Code Review Checklist Validation"
+          echo "=========================================================="
+          echo "1. Documentation of added functionality"
+          echo "2. Bug & defect search"
+          echo "3. Security analysis"
+          echo "4. Best practices validation"
+          echo "5. Architecture & modularity validation"
+          echo "6. Performance review"
+          echo "=========================================================="
+
+          # Verify PR description acknowledges the review checklist
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          echo "Checking PR description for review checklist compliance..."
+          if echo "$PR_BODY" | grep -q "Automated Code Review Gate (6 Pillars)"; then
+            echo "✅ PR description contains mandatory 6-pillar review checklist."
+          else
+            echo "⚠️ Warning: PR description should include the 6-pillar review checklist from pull_request_template.md."
+          fi

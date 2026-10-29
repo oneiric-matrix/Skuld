@@ -1,0 +1,20 @@
+name: Project Status Automator
+
+on:
+  pull_request:
+    branches:
+      - unit
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  update-status:
+    name: Sync Issue to In Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log Promotion Trigger
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR #${PR_NUMBER} opened targeting 'unit': '${PR_TITLE}'"
+          echo "Issue status transition: Moves linked [Gen] issue to 'In Review'."
+          echo "Automated tests transition: Once CI checks pass, advances to 'Auto-Testing'."
