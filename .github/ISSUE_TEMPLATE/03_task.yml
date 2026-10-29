@@ -1,0 +1,33 @@
+name: Task
+description: Log an engineering task, chore, refactor, or setup activity
+title: "[Gen][TASK]: "
+labels: ["task", "triaging"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚙️ Engineering Task
+        > **Rule**: Log the comprehensive task details, objectives, and deliverables.
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Summary
+      description: Detailed summary of the work to be carried out.
+      placeholder: Describe the technical work or chore to be completed...
+    validations:
+      required: true
+  - type: textarea
+    id: task-deliverables
+    attributes:
+      label: Key Deliverables & Scope
+      description: Checklist of specific items to deliver.
+      placeholder: |
+        - [ ] Deliverable 1
+        - [ ] Deliverable 2
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies & Considerations
+      description: Any prerequisites, related issues, or technical constraints.

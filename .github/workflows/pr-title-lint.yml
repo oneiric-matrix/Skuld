@@ -1,0 +1,35 @@
+name: PR Title & Semantic Convention Linter
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-pr-title:
+    name: Verify PR Title Convention
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Title Syntax
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "Inspecting Pull Request title: '$TITLE'"
+
+          # Valid conventions:
+          # 1. Generated issues/tasks: starts with "[Gen]"
+          # 2. Conventional commits: feat, fix, chore, docs, test, refactor, ci, perf, style
+          # 3. Branch progression PRs: e.g. "Merge dev/* into unit", "[Gen] Merge..."
+
+          REGEX="^(\[Gen\]|(feat|fix|chore|docs|test|refactor|ci|perf|style)(\([a-zA-Z0-9_-]+\))?:|Merge\s+)"
+
+          if [[ "$TITLE" =~ $REGEX ]]; then
+            echo "✅ PR title follows standard naming convention."
+            exit 0
+          else
+            echo "❌ Error: PR title does not meet naming conventions."
+            echo ""
+            echo "Allowed formats:"
+            echo "  - Generated issues/tasks : [Gen][FEATURE]: ..., [Gen][BUG]: ..., [Gen][TASK]: ..."
+            echo "  - Conventional commits   : feat: ..., fix: ..., chore: ..., docs: ..."
+            echo "  - Branch promotion PRs   : Merge <source> into <target>"
+            exit 1
+          fi
