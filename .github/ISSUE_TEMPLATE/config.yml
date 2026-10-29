@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Workflow Guidelines & Lifecycle
+    url: https://github.com/oneiric-matrix/oneiric-template/blob/main/docs/ISSUE_LIFECYCLE.md
+    about: Review our strict issue creation, triaging, and project status board rules.
