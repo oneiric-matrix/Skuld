@@ -58,7 +58,7 @@ export class StreamingTTSEngine {
   async speakClause(clause: string, voiceProfile?: VoiceProfileConfig): Promise<void> {
     this.speechQueue.push(clause);
     if (!this.isProcessingQueue) {
-      this.processQueue(voiceProfile);
+      await this.processQueue(voiceProfile);
     }
   }
 
