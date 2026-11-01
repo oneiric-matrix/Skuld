@@ -14,6 +14,11 @@ import { hardwareVault } from './src/security/HardwareVault';
 import { vaultDatabase, AgentConfigRecord } from './src/security/VaultDatabase';
 import { butlerService } from './src/services/ButlerService';
 import { jobQueue } from './src/queue/JobQueue';
+import { audioCapture } from './src/ai/AudioCaptureService';
+import { localSTT } from './src/ai/LocalSTTEngine';
+import { localLLM } from './src/ai/LocalLLMEngine';
+import { streamingTTS } from './src/ai/StreamingTTSEngine';
+import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
 
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -23,8 +28,12 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
+  // AI Pipeline State
+  const [isRecording, setIsRecording] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [streamedResponse, setStreamedResponse] = useState('');
+
   useEffect(() => {
-    // Start background job worker
     jobQueue.startQueueWorker(2000);
     return () => {
       jobQueue.stopQueueWorker();
@@ -55,23 +64,71 @@ export default function App() {
     }
   };
 
-  const handleQuickCaptureSubmit = async (mode: 'voice' | 'text') => {
+  // Zero-Lag Voice Conversation Flow
+  const handleToggleVoice = async () => {
     if (!selectedAgent) return;
-    const content = mode === 'voice' ? 'Voice memo captured (simulated)' : inputText;
-    if (!content.trim()) return;
 
-    setStatusMessage(`Enqueuing background task for ${selectedAgent.customName}...`);
+    if (!isRecording) {
+      try {
+        await audioCapture.startRecording();
+        setIsRecording(true);
+        setStatusMessage('🎙️ Listening... Tap again to finish speaking.');
+      } catch (err: any) {
+        setStatusMessage('Mic Error: ' + err.message);
+      }
+    } else {
+      try {
+        setIsRecording(false);
+        setStatusMessage('Processing speech locally (<100ms)...');
+        const audioResult = await audioCapture.stopRecording();
+        
+        // Transcribe locally
+        const transcript = await localSTT.transcribeAudio(audioResult.uri);
+        setStatusMessage(`You said: "${transcript}"`);
+
+        // Trigger zero-lag streaming conversation with avatar
+        await runStreamingConversation(transcript);
+      } catch (err: any) {
+        setStatusMessage('Transcription Error: ' + err.message);
+      }
+    }
+  };
+
+  const handleSendText = async () => {
+    if (!inputText.trim() || !selectedAgent) return;
+    const query = inputText.trim();
+    setInputText('');
+    await runStreamingConversation(query);
+  };
+
+  const runStreamingConversation = async (userPrompt: string) => {
+    if (!selectedAgent) return;
+
+    setIsThinking(true);
+    setStreamedResponse('');
+
     try {
-      const jobId = await butlerService.handleWidgetCapture(selectedAgent.id, {
-        inputMode: mode,
-        rawText: content,
-        source: 'hud',
-        timestamp: Date.now(),
-      });
-      setInputText('');
-      setStatusMessage(`✅ Task ${jobId} securely enqueued! Agent will process in background.`);
+      await localLLM.streamCompletion(
+        [
+          { role: 'system', content: selectedAgent.systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        (token) => {
+          setIsThinking(false);
+          setStreamedResponse((prev) => prev + token);
+        },
+        (clause) => {
+          // Immediately feed clause to TTS while subsequent tokens are generating!
+          streamingTTS.speakClause(clause, {
+            modelId: selectedAgent.voiceId as any,
+            speed: 1.0,
+            pitch: 1.0,
+          });
+        }
+      );
     } catch (err: any) {
-      setStatusMessage(`Error: ${err?.message}`);
+      setStatusMessage('Inference Error: ' + err.message);
+      setIsThinking(false);
     }
   };
 
@@ -119,41 +176,49 @@ export default function App() {
           </ScrollView>
 
           {selectedAgent ? (
-            <View style={styles.captureCard}>
-              <View style={styles.agentHeader}>
-                <View>
-                  <Text style={styles.activeAgentTitle}>{selectedAgent.customName}</Text>
-                  <Text style={styles.activeAgentRole}>{selectedAgent.roleTitle}</Text>
-                </View>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>Widget Ready</Text>
-                </View>
-              </View>
+            <View style={styles.stageCard}>
+              {/* Dynamic Animated Avatar Stage with Mouth Flap Visemes */}
+              <AnimatedAvatarStage
+                agentName={selectedAgent.customName}
+                avatarConfig={{
+                  type: 'sprite_viseme',
+                  assetUri: selectedAgent.avatarProfile,
+                  mouthFlapEnabled: true,
+                  accentColor: selectedAgent.id === 'butler' ? '#00E5FF' : '#10B981',
+                }}
+                isListening={isRecording}
+                isThinking={isThinking}
+              />
 
-              <Text style={styles.agentPromptSnippet}>"{selectedAgent.systemPrompt}"</Text>
+              {streamedResponse ? (
+                <View style={styles.responseContainer}>
+                  <Text style={styles.responseText}>{streamedResponse}</Text>
+                </View>
+              ) : null}
 
               <TextInput
                 style={styles.textInput}
-                placeholder={`Tell or ask ${selectedAgent.customName}...`}
+                placeholder={`Chat with ${selectedAgent.customName}...`}
                 placeholderTextColor="#777"
                 value={inputText}
                 onChangeText={setInputText}
-                multiline
               />
 
               <View style={styles.actionRow}>
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.voiceBtn]}
-                  onPress={() => handleQuickCaptureSubmit('voice')}
+                  style={[styles.actionBtn, isRecording ? styles.voiceBtnActive : styles.voiceBtn]}
+                  onPress={handleToggleVoice}
                 >
-                  <Text style={styles.actionBtnText}>🎙️ Speak to Agent</Text>
+                  <Text style={[styles.actionBtnText, isRecording ? styles.textWhite : null]}>
+                    {isRecording ? '⏹️ Stop Speaking' : '🎙️ Speak to Agent'}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.sendBtn]}
-                  onPress={() => handleQuickCaptureSubmit('text')}
+                  onPress={handleSendText}
                 >
-                  <Text style={styles.actionBtnText}>💬 Send Task</Text>
+                  <Text style={styles.actionBtnText}>💬 Chat</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -240,14 +305,14 @@ const styles = StyleSheet.create({
   },
   agentScroll: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   agentCard: {
     backgroundColor: '#141D2B',
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
-    marginRight: 12,
-    width: 140,
+    marginRight: 10,
+    width: 135,
     borderWidth: 1,
     borderColor: '#1F2C42',
   },
@@ -256,71 +321,49 @@ const styles = StyleSheet.create({
     backgroundColor: '#172738',
   },
   agentName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFF',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   agentRole: {
     fontSize: 11,
     color: '#8899A6',
   },
-  captureCard: {
+  stageCard: {
     backgroundColor: '#141D2B',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#1F2C42',
   },
-  agentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+  responseContainer: {
+    backgroundColor: '#0E1724',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#00E5FF',
   },
-  activeAgentTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  activeAgentRole: {
-    fontSize: 13,
-    color: '#00E5FF',
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: '#1F3348',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 10,
-    color: '#00E5FF',
-    fontWeight: '600',
-  },
-  agentPromptSnippet: {
-    fontSize: 12,
-    color: '#8899A6',
-    fontStyle: 'italic',
-    marginBottom: 16,
+  responseText: {
+    color: '#E2E8F0',
+    fontSize: 14,
+    lineHeight: 20,
   },
   textInput: {
     backgroundColor: '#0D1420',
     color: '#FFF',
     borderRadius: 10,
-    padding: 14,
-    minHeight: 90,
-    textAlignVertical: 'top',
-    fontSize: 15,
+    padding: 12,
+    fontSize: 14,
     borderWidth: 1,
     borderColor: '#24334C',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   actionBtn: {
     flex: 1,
@@ -334,6 +377,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#30425D',
   },
+  voiceBtnActive: {
+    backgroundColor: '#EF4444',
+  },
   sendBtn: {
     backgroundColor: '#00E5FF',
   },
@@ -341,6 +387,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0A0E17',
+  },
+  textWhite: {
+    color: '#FFF',
   },
   statusText: {
     marginTop: 16,
