@@ -25,6 +25,11 @@ jobs:
           # 1. Node.js / JavaScript / TypeScript projects
           if [ -f "package.json" ]; then
             echo "📦 Detected package.json. Setting up Node.js..."
+            if [ -f "package-lock.json" ]; then
+              npm ci
+            else
+              npm install
+            fi
             # Check if a test script is defined
             if grep -q '"test"' package.json; then
               TEST_FOUND=true
