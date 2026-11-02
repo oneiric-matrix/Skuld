@@ -1,5 +1,4 @@
 import { agentBus } from '../kernel/AgentBusService';
-import { jobQueue } from '../queue/JobQueue';
 import { vaultDatabase } from '../security/VaultDatabase';
 
 export interface CalendarEvent {
@@ -8,6 +7,9 @@ export interface CalendarEvent {
   startTime: number;
   endTime: number;
   category: 'meeting' | 'reminder' | 'focus_block' | 'personal';
+  location?: string;
+  notes?: string;
+  createdAt: number;
 }
 
 export interface ButlerReminder {
@@ -15,16 +17,19 @@ export interface ButlerReminder {
   text: string;
   remindAt: number;
   isCompleted: boolean;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  createdAt: number;
 }
 
 /**
  * The Butler Agent Domain Service.
  * Acts as a peer agent providing universal calendar management, reminders, and daily briefings.
+ * Interacts with other agents strictly via the central Agent Bus.
  */
 export class ButlerAgentService {
   private static instance: ButlerAgentService | null = null;
-  private calendarEvents: CalendarEvent[] = [];
-  private reminders: ButlerReminder[] = [];
+  private calendarEvents = new Map<string, CalendarEvent>();
+  private reminders = new Map<string, ButlerReminder>();
 
   private constructor() {
     this.registerBusHandlers();
@@ -50,78 +55,152 @@ export class ButlerAgentService {
       }
     );
 
-    // 2. Peer agents can request Butler to schedule a reminder or calendar block
-    agentBus.registerQueryHandler<{ title: string; startTime: number; endTime: number }, CalendarEvent>(
-      'butler',
-      'schedule_event',
-      async (query) => {
-        return this.addCalendarEvent(
-          query.payload.title,
-          query.payload.startTime,
-          query.payload.endTime
-        );
-      }
-    );
+    // 2. Peer agents can request Butler to schedule a calendar event
+    agentBus.registerQueryHandler<
+      { title: string; startTime: number; endTime: number; category?: CalendarEvent['category'] },
+      CalendarEvent
+    >('butler', 'schedule_event', async (query) => {
+      return this.addCalendarEvent(
+        query.payload.title,
+        query.payload.startTime,
+        query.payload.endTime,
+        query.payload.category
+      );
+    });
+
+    // 3. Peer agents can create universal reminders via Butler
+    agentBus.registerQueryHandler<
+      { text: string; remindAt: number; priority?: ButlerReminder['priority'] },
+      ButlerReminder
+    >('butler', 'create_reminder', async (query) => {
+      return this.addReminder(
+        query.payload.text,
+        query.payload.remindAt,
+        query.payload.priority
+      );
+    });
   }
 
   addCalendarEvent(
     title: string,
     startTime: number,
     endTime: number,
-    category: CalendarEvent['category'] = 'meeting'
+    category: CalendarEvent['category'] = 'meeting',
+    location?: string,
+    notes?: string
   ): CalendarEvent {
+    if (!title || !title.trim()) {
+      throw new Error('Event title cannot be empty');
+    }
+    if (endTime <= startTime) {
+      throw new Error('Event end time must be after start time');
+    }
+
     const event: CalendarEvent = {
       id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      title,
+      title: title.trim(),
       startTime,
       endTime,
       category,
+      location,
+      notes,
+      createdAt: Date.now(),
     };
-    this.calendarEvents.push(event);
+
+    this.calendarEvents.set(event.id, event);
     return event;
   }
 
   getUpcomingEvents(): CalendarEvent[] {
-    return [...this.calendarEvents];
+    const now = Date.now();
+    return Array.from(this.calendarEvents.values())
+      .filter((e) => e.endTime >= now)
+      .sort((a, b) => a.startTime - b.startTime);
   }
 
-  addReminder(text: string, remindAt: number): ButlerReminder {
+  deleteCalendarEvent(id: string): boolean {
+    return this.calendarEvents.delete(id);
+  }
+
+  addReminder(
+    text: string,
+    remindAt: number,
+    priority: ButlerReminder['priority'] = 'normal'
+  ): ButlerReminder {
+    if (!text || !text.trim()) {
+      throw new Error('Reminder text cannot be empty');
+    }
+
     const reminder: ButlerReminder = {
       id: `rem_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      text,
+      text: text.trim(),
       remindAt,
       isCompleted: false,
+      priority,
+      createdAt: Date.now(),
     };
-    this.reminders.push(reminder);
+
+    this.reminders.set(reminder.id, reminder);
     return reminder;
   }
 
-  getReminders(): ButlerReminder[] {
-    return [...this.reminders];
+  toggleReminder(id: string): ButlerReminder {
+    const reminder = this.reminders.get(id);
+    if (!reminder) {
+      throw new Error(`Reminder ${id} not found`);
+    }
+    reminder.isCompleted = !reminder.isCompleted;
+    return reminder;
+  }
+
+  getReminders(includeCompleted = false): ButlerReminder[] {
+    const list = Array.from(this.reminders.values());
+    return (includeCompleted ? list : list.filter((r) => !r.isCompleted)).sort(
+      (a, b) => a.remindAt - b.remindAt
+    );
+  }
+
+  deleteReminder(id: string): boolean {
+    return this.reminders.delete(id);
   }
 
   /**
-   * Generates a consolidated morning/evening briefing by querying peer agents.
+   * Generates a consolidated morning/evening briefing by querying peer agents over the Agent Bus.
    */
   async generateDailyBriefing(): Promise<string> {
     const events = this.getUpcomingEvents();
-    const reminders = this.getReminders().filter((r) => !r.isCompleted);
+    const pendingReminders = this.getReminders(false);
 
-    let briefing = `Good day! You have ${events.length} event(s) scheduled and ${reminders.length} pending reminder(s).`;
+    let briefing = `Good day! You have ${events.length} event(s) scheduled and ${pendingReminders.length} pending reminder(s).`;
 
-    // Consult peer agent: Doctor (Health)
+    // Query Doctor/Health peer agent via bus
     const healthSummary = await agentBus.askAgent<{ date: number }, { stepsToday: number }>(
       'butler',
       'health',
       'get_vitals_summary',
       { date: Date.now() }
     );
-
     if (healthSummary.success && healthSummary.data) {
-      briefing += ` Step counter records ${healthSummary.data.stepsToday} steps today.`;
+      briefing += ` Daily step count stands at ${healthSummary.data.stepsToday} steps.`;
+    }
+
+    // Query Chef peer agent via bus for dinner plan
+    const mealPlan = await agentBus.askAgent<{ mealType: string }, { recipeName: string }>(
+      'butler',
+      'chef',
+      'get_scheduled_meal',
+      { mealType: 'dinner' }
+    );
+    if (mealPlan.success && mealPlan.data) {
+      briefing += ` Tonight's scheduled dinner is ${mealPlan.data.recipeName}.`;
     }
 
     return briefing;
+  }
+
+  clearAll(): void {
+    this.calendarEvents.clear();
+    this.reminders.clear();
   }
 }
 

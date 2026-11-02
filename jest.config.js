@@ -7,4 +7,10 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
+  moduleNameMapper: {
+    '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.ts',
+    '^expo-local-authentication$': '<rootDir>/__mocks__/expo-local-authentication.ts',
+    '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
+    '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
+  },
 };
