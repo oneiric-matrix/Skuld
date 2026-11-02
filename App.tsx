@@ -19,6 +19,8 @@ import { localSTT } from './src/ai/LocalSTTEngine';
 import { localLLM } from './src/ai/LocalLLMEngine';
 import { streamingTTS } from './src/ai/StreamingTTSEngine';
 import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
+import { AgentStudioModal } from './src/components/AgentStudioModal';
+import { AgentManifest } from './src/agents/AgentManifest';
 
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -27,6 +29,7 @@ export default function App() {
   const [selectedAgent, setSelectedAgent] = useState<AgentConfigRecord | null>(null);
   const [inputText, setInputText] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
 
   // AI Pipeline State
   const [isRecording, setIsRecording] = useState(false);
@@ -47,11 +50,7 @@ export default function App() {
       const unlocked = await hardwareVault.unlockVault('Unlock Skuld Secure Vault');
       if (unlocked) {
         await vaultDatabase.init();
-        const roster = await butlerService.getAgentRoster();
-        setAgents(roster);
-        if (roster.length > 0) {
-          setSelectedAgent(roster[0]);
-        }
+        await refreshAgents();
         setIsUnlocked(true);
         setStatusMessage('Vault unlocked with hardware-backed encryption.');
       } else {
@@ -64,7 +63,19 @@ export default function App() {
     }
   };
 
-  // Zero-Lag Voice Conversation Flow
+  const refreshAgents = async () => {
+    const roster = await butlerService.getAgentRoster();
+    setAgents(roster);
+    if (roster.length > 0 && !selectedAgent) {
+      setSelectedAgent(roster[0]);
+    }
+  };
+
+  const handleAgentCreated = (newAgent: AgentManifest) => {
+    refreshAgents();
+    setStatusMessage(`🎉 Agent "${newAgent.name}" provisioned and widget-ready!`);
+  };
+
   const handleToggleVoice = async () => {
     if (!selectedAgent) return;
 
@@ -81,12 +92,8 @@ export default function App() {
         setIsRecording(false);
         setStatusMessage('Processing speech locally (<100ms)...');
         const audioResult = await audioCapture.stopRecording();
-        
-        // Transcribe locally
         const transcript = await localSTT.transcribeAudio(audioResult.uri);
         setStatusMessage(`You said: "${transcript}"`);
-
-        // Trigger zero-lag streaming conversation with avatar
         await runStreamingConversation(transcript);
       } catch (err: any) {
         setStatusMessage('Transcription Error: ' + err.message);
@@ -118,7 +125,6 @@ export default function App() {
           setStreamedResponse((prev) => prev + token);
         },
         (clause) => {
-          // Immediately feed clause to TTS while subsequent tokens are generating!
           streamingTTS.speakClause(clause, {
             modelId: selectedAgent.voiceId as any,
             speed: 1.0,
@@ -136,8 +142,18 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.header}>
-        <Text style={styles.title}>SKULD</Text>
-        <Text style={styles.subtitle}>Privacy-Sovereign Multi-Agent OS</Text>
+        <View>
+          <Text style={styles.title}>SKULD</Text>
+          <Text style={styles.subtitle}>Privacy-Sovereign Multi-Agent OS</Text>
+        </View>
+        {isUnlocked ? (
+          <TouchableOpacity
+            style={styles.newAgentBtn}
+            onPress={() => setIsStudioOpen(true)}
+          >
+            <Text style={styles.newAgentBtnText}>+ New Agent</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {!isUnlocked ? (
@@ -158,7 +174,13 @@ export default function App() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.sectionTitle}>Select Active Agent</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Agent Roster</Text>
+            <TouchableOpacity onPress={() => setIsStudioOpen(true)}>
+              <Text style={styles.openStudioText}>Studio ⚙️</Text>
+            </TouchableOpacity>
+          </View>
+
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.agentScroll}>
             {agents.map((agent) => {
               const isSelected = selectedAgent?.id === agent.id;
@@ -177,7 +199,6 @@ export default function App() {
 
           {selectedAgent ? (
             <View style={styles.stageCard}>
-              {/* Dynamic Animated Avatar Stage with Mouth Flap Visemes */}
               <AnimatedAvatarStage
                 agentName={selectedAgent.customName}
                 avatarConfig={{
@@ -231,6 +252,13 @@ export default function App() {
           ) : null}
         </ScrollView>
       )}
+
+      {/* Dynamic Agent Creation Studio Modal */}
+      <AgentStudioModal
+        visible={isStudioOpen}
+        onClose={() => setIsStudioOpen(false)}
+        onAgentCreated={handleAgentCreated}
+      />
     </SafeAreaView>
   );
 }
@@ -246,6 +274,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1A2333',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   title: {
     fontSize: 24,
@@ -257,6 +288,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8899A6',
     marginTop: 2,
+  },
+  newAgentBtn: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  newAgentBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   lockContainer: {
     flex: 1,
@@ -295,13 +337,23 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#8899A6',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 12,
+  },
+  openStudioText: {
+    color: '#00E5FF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   agentScroll: {
     flexDirection: 'row',
