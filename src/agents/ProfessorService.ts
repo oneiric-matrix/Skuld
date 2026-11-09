@@ -1,4 +1,5 @@
 import { agentBus } from '../kernel/AgentBusService';
+import { ocrEngine, OCRProcessingOptions } from '../services/OCREngineService';
 
 export type SkillProficiency = 'beginner' | 'intermediate' | 'advanced' | 'master';
 export type FlashcardEase = 'again' | 'hard' | 'good' | 'easy';
@@ -325,6 +326,36 @@ export class ProfessorService {
 
   deleteFlashcard(id: string): boolean {
     return this.flashcards.delete(id);
+  }
+
+  /**
+   * Generates a flashcard by running OCR on textbook pages or handwritten study notes
+   * with book/document-tailored OCR parameters.
+   */
+  async createFlashcardFromImage(
+    imageUri: string,
+    frontQuestion: string,
+    options: Partial<OCRProcessingOptions> = {},
+    roadmapId?: string
+  ): Promise<SpacedRepetitionCard> {
+    if (!frontQuestion || !frontQuestion.trim()) {
+      throw new Error('Front question cannot be empty');
+    }
+
+    const ocrResult = await ocrEngine.processImage(imageUri, {
+      documentType: 'book_page',
+      confidenceThreshold: 0.6,
+      enhanceContrast: true,
+      detectLanguage: 'en',
+      ...options,
+    });
+
+    const backText = ocrResult.fullText.trim();
+    if (!backText) {
+      throw new Error('Could not extract valid text from study image');
+    }
+
+    return this.createFlashcard(frontQuestion.trim(), backText, roadmapId);
   }
 
   // --- Study Streaks & Metrics ---

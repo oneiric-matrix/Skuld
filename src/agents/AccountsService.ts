@@ -1,4 +1,5 @@
 import { agentBus } from '../kernel/AgentBusService';
+import { ocrEngine, OCRProcessingOptions } from '../services/OCREngineService';
 
 export type ExpenseCategory =
   | 'food_dining'
@@ -419,6 +420,24 @@ export class AccountsService {
       `Parsed from OCR receipt: ${merchant}`,
       receiptUri
     );
+  }
+
+  /**
+   * Scans a receipt image directly utilizing the modular OCREngineService with receipt-tailored parameters.
+   */
+  async scanReceiptImage(
+    imageUri: string,
+    options: Partial<OCRProcessingOptions> = {},
+    defaultCategory: ExpenseCategory = 'groceries'
+  ): Promise<ExpenseRecord> {
+    const ocrResult = await ocrEngine.processImage(imageUri, {
+      documentType: 'receipt',
+      confidenceThreshold: 0.7,
+      enhanceContrast: true,
+      ...options,
+    });
+
+    return this.logExpenseFromReceipt(ocrResult.fullText, defaultCategory, imageUri);
   }
 
   clearAll(): void {
