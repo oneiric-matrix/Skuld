@@ -21,6 +21,7 @@ import { streamingTTS } from './src/ai/StreamingTTSEngine';
 import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
 import { AgentStudioModal } from './src/components/AgentStudioModal';
 import { CameraScannerModal } from './src/components/CameraScannerModal';
+import { FloatingQuickTalkHud } from './src/components/FloatingQuickTalkHud';
 import { HomeScreenHub, UrgentNoticeItem, ActivityRingsSummary } from './src/components/HomeScreenHub';
 import { AgentManifest } from './src/agents/AgentManifest';
 import { butlerAgent, CalendarEvent, ButlerReminder } from './src/agents/ButlerAgentService';
@@ -644,6 +645,24 @@ export default function App() {
           setStatusMessage('Document scanned and processed into vault.');
         }}
       />
+
+      {/* Floating Quick-Talk HUD (Accessible within 1-tap across all screens) */}
+      {isUnlocked ? (
+        <FloatingQuickTalkHud
+          agents={agents}
+          activeAgent={selectedAgent}
+          onSelectAgent={(agent) => setSelectedAgent(agent)}
+          isRecording={isRecording}
+          isThinking={isThinking}
+          streamedResponse={streamedResponse}
+          onToggleVoice={handleToggleVoice}
+          onSendTextPrompt={(text) => {
+            setInputText(text);
+            runStreamingConversation(text);
+          }}
+          statusMessage={statusMessage}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
