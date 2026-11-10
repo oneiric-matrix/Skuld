@@ -8,6 +8,7 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
   moduleNameMapper: {
+    '^react-native$': '<rootDir>/__mocks__/react-native.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.ts',
     '^expo-local-authentication$': '<rootDir>/__mocks__/expo-local-authentication.ts',
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
