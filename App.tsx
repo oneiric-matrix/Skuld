@@ -23,10 +23,21 @@ import { AgentStudioModal } from './src/components/AgentStudioModal';
 import { CameraScannerModal } from './src/components/CameraScannerModal';
 import { HomeScreenHub, UrgentNoticeItem, ActivityRingsSummary } from './src/components/HomeScreenHub';
 import { AgentManifest } from './src/agents/AgentManifest';
-import { butlerAgent } from './src/agents/ButlerAgentService';
-import { healthAgent } from './src/agents/HealthService';
-import { accountsAgent } from './src/agents/AccountsService';
-import { projectManagerAgent } from './src/agents/ProjectManagerService';
+import { butlerAgent, CalendarEvent, ButlerReminder } from './src/agents/ButlerAgentService';
+import { healthAgent, DailyHealthVitals, MedicationSchedule, WorkoutSession } from './src/agents/HealthService';
+import { accountsAgent, SpendingSummary, ExpenseRecord, RecurringBill, ExpenseCategory } from './src/agents/AccountsService';
+import { projectManagerAgent, ProjectItem, ProjectTask, Milestone, PriorityLevel, TaskStatus } from './src/agents/ProjectManagerService';
+import { professorAgent, StudySummary, LearningRoadmap, AcquiredSkill, SpacedRepetitionCard, FlashcardEase } from './src/agents/ProfessorService';
+import { chefAgent, ScheduledMeal, Recipe, GroceryItem, ActiveKitchenTimer, DietaryPreference } from './src/agents/ChefService';
+import { colors, spacing, borderRadius, typography, touchTargets } from './src/theme/tokens';
+
+// Phase 5 Dashboards
+import { ButlerDashboardView } from './src/components/dashboards/ButlerDashboardView';
+import { ProjectManagerDashboardView } from './src/components/dashboards/ProjectManagerDashboardView';
+import { AccountsDashboardView } from './src/components/dashboards/AccountsDashboardView';
+import { HealthDashboardView } from './src/components/dashboards/HealthDashboardView';
+import { ProfessorDashboardView } from './src/components/dashboards/ProfessorDashboardView';
+import { ChefDashboardView } from './src/components/dashboards/ChefDashboardView';
 
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -54,6 +65,47 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [streamedResponse, setStreamedResponse] = useState('');
+
+  // Domain Agent Data States
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [reminders, setReminders] = useState<ButlerReminder[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [spendingSummary, setSpendingSummary] = useState<SpendingSummary>({
+    totalSpent: 0,
+    currency: 'USD',
+    count: 0,
+    categoryBreakdown: {} as any,
+    averageExpense: 0,
+  });
+  const [recentExpenses, setRecentExpenses] = useState<ExpenseRecord[]>([]);
+  const [recurringBills, setRecurringBills] = useState<RecurringBill[]>([]);
+  const [dailyVitals, setDailyVitals] = useState<DailyHealthVitals>({
+    dateString: new Date().toISOString().split('T')[0],
+    steps: 0,
+    hydrationMl: 0,
+    hydrationGoalMl: 2500,
+    workouts: [],
+    medicationsTakenCount: 0,
+    medicationsTotalCount: 0,
+  });
+  const [medications, setMedications] = useState<MedicationSchedule[]>([]);
+  const [workouts, setWorkouts] = useState<WorkoutSession[]>([]);
+  const [studySummary, setStudySummary] = useState<StudySummary>({
+    activeRoadmapsCount: 0,
+    acquiredSkillsCount: 0,
+    dueCardsCount: 0,
+    currentStreakDays: 1,
+    totalStudyHours: 0,
+  });
+  const [roadmaps, setRoadmaps] = useState<LearningRoadmap[]>([]);
+  const [skills, setSkills] = useState<AcquiredSkill[]>([]);
+  const [dueCards, setDueCards] = useState<SpacedRepetitionCard[]>([]);
+  const [scheduledMeals, setScheduledMeals] = useState<ScheduledMeal[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [groceries, setGroceries] = useState<GroceryItem[]>([]);
+  const [timers, setTimers] = useState<ActiveKitchenTimer[]>([]);
 
   useEffect(() => {
     jobQueue.startQueueWorker(2000);
@@ -89,6 +141,48 @@ export default function App() {
       setSelectedAgent(roster[0]);
     }
     await refreshHomeHubData();
+    await refreshDomainData();
+  };
+
+  const refreshDomainData = async () => {
+    try {
+      // Butler
+      setCalendarEvents(butlerAgent.getUpcomingEvents());
+      setReminders(butlerAgent.getReminders());
+
+      // Project Manager
+      const projs = projectManagerAgent.getProjects();
+      setProjects(projs);
+      const activeProjId = projs.length > 0 ? projs[0].id : '';
+      setTasks(projectManagerAgent.getTasksForProject(activeProjId));
+      if (projs.length > 0 && projs[0].milestones) {
+        setMilestones(projs[0].milestones);
+      }
+
+      // Accounts
+      setSpendingSummary(accountsAgent.getSpendingSummary());
+      setRecentExpenses(accountsAgent.getExpenses());
+      setRecurringBills(accountsAgent.getUpcomingBills(30));
+
+      // Health
+      setDailyVitals(healthAgent.getDailyVitals());
+      setMedications(healthAgent.getMedications());
+      setWorkouts(healthAgent.getWorkouts());
+
+      // Professor
+      setStudySummary(professorAgent.getStudySummary());
+      setRoadmaps(professorAgent.getRoadmaps());
+      setSkills(professorAgent.getSkills());
+      setDueCards(professorAgent.getDueFlashcards());
+
+      // Chef
+      setScheduledMeals(chefAgent.getScheduledMeals());
+      setRecipes(chefAgent.getRecipes());
+      setGroceries(chefAgent.getGroceryList());
+      setTimers(chefAgent.getTimers());
+    } catch (e) {
+      // Fallback safe state
+    }
   };
 
   const refreshHomeHubData = async () => {
@@ -100,7 +194,7 @@ export default function App() {
       // 2. Fetch live vitals
       const vitals = healthAgent.getDailyVitals();
       const bills = accountsAgent.getUpcomingBills(7);
-      const pendingTasks = projectManagerAgent.getTasksForProject('').filter(t => t.status !== 'done');
+      const pendingTasks = projectManagerAgent.getTasksForProject('').filter((t) => t.status !== 'done');
 
       setVitalsSummary({
         stepsCount: vitals.steps,
@@ -165,8 +259,8 @@ export default function App() {
       }
 
       setNotices(urgentList);
-    } catch {
-      // Non-blocking fallback
+    } catch (err: any) {
+      console.warn('Failed to refresh home hub metrics:', err.message);
     }
   };
 
@@ -235,6 +329,164 @@ export default function App() {
       setStatusMessage('Inference Error: ' + err.message);
       setIsThinking(false);
     }
+  };
+
+  const renderActiveDashboard = () => {
+    if (!selectedAgent) return null;
+    const id = selectedAgent.id.toLowerCase();
+
+    if (id.includes('butler')) {
+      return (
+        <ButlerDashboardView
+          events={calendarEvents}
+          reminders={reminders}
+          onAddEvent={(title, startTime, endTime, category) => {
+            butlerAgent.addCalendarEvent(title, startTime, endTime, category);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onToggleReminder={(reminderId) => {
+            butlerAgent.toggleReminder(reminderId);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onAddReminder={(text, priority) => {
+            butlerAgent.addReminder(text, Date.now() + 3600000, priority);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onDeleteEvent={(evtId) => {
+            butlerAgent.deleteCalendarEvent(evtId);
+            refreshDomainData();
+          }}
+        />
+      );
+    }
+
+    if (id.includes('project') || id.includes('pm')) {
+      return (
+        <ProjectManagerDashboardView
+          projects={projects}
+          tasks={tasks}
+          milestones={milestones}
+          onAddTask={(projectId, title, priority: PriorityLevel) => {
+            projectManagerAgent.addTask(projectId, title, priority);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onUpdateTaskStatus={(taskId, status: TaskStatus) => {
+            projectManagerAgent.updateTaskStatus(taskId, status);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onFocusBlockRequested={(taskTitle) => {
+            const now = Date.now();
+            butlerAgent.addCalendarEvent(
+              `Focus: ${taskTitle}`,
+              now + 600000,
+              now + 3600000,
+              'focus_block'
+            );
+            setStatusMessage(`📅 Focus Block booked with Butler for "${taskTitle}"`);
+            refreshDomainData();
+          }}
+        />
+      );
+    }
+
+    if (id.includes('accounts') || id.includes('finance')) {
+      return (
+        <AccountsDashboardView
+          summary={spendingSummary}
+          recentExpenses={recentExpenses}
+          recurringBills={recurringBills}
+          onAddExpense={(amount, category: ExpenseCategory, merchant, currency) => {
+            accountsAgent.logExpense(amount, merchant, category, currency);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onToggleBillPaid={(billId) => {
+            accountsAgent.markBillPaid(billId);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onOpenReceiptScanner={() => setIsScannerOpen(true)}
+        />
+      );
+    }
+
+    if (id.includes('health') || id.includes('doctor')) {
+      return (
+        <HealthDashboardView
+          vitals={dailyVitals}
+          medications={medications}
+          workouts={workouts}
+          onLogSteps={(delta) => {
+            healthAgent.recordSteps(delta);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onLogHydration={(amountMl) => {
+            healthAgent.logHydration(amountMl);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onToggleMedication={(medId) => {
+            healthAgent.markMedicationTaken(medId);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+          onLogWorkout={(type, title, durationMinutes, caloriesBurned) => {
+            healthAgent.logWorkout(title, type, durationMinutes, caloriesBurned);
+            refreshDomainData();
+            refreshHomeHubData();
+          }}
+        />
+      );
+    }
+
+    if (id.includes('professor') || id.includes('tutor')) {
+      return (
+        <ProfessorDashboardView
+          summary={studySummary}
+          roadmaps={roadmaps}
+          skills={skills}
+          dueCards={dueCards}
+          onReviewCard={(cardId, rating: FlashcardEase) => {
+            professorAgent.reviewFlashcard(cardId, rating);
+            refreshDomainData();
+          }}
+          onAdvanceTopic={(roadmapId, topicId) => {
+            professorAgent.toggleTopicCompletion(roadmapId, topicId);
+            refreshDomainData();
+          }}
+        />
+      );
+    }
+
+    if (id.includes('chef') || id.includes('cook')) {
+      return (
+        <ChefDashboardView
+          scheduledMeals={scheduledMeals}
+          recipes={recipes}
+          groceryList={groceries}
+          activeTimers={timers}
+          onToggleGroceryItem={(itemId) => {
+            chefAgent.toggleGroceryItem(itemId);
+            refreshDomainData();
+          }}
+          onStartCookingTimer={(label, durationSeconds) => {
+            chefAgent.startTimer(label, durationSeconds);
+            refreshDomainData();
+          }}
+          onFilterDiet={(diet: DietaryPreference) => {
+            // State managed internally by view
+          }}
+        />
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -357,6 +609,16 @@ export default function App() {
             </View>
           ) : null}
 
+          {/* DYNAMIC DOMAIN PERSONA DASHBOARD VIEW */}
+          {selectedAgent ? (
+            <View style={styles.dashboardContainer}>
+              <Text style={styles.dashboardHeader}>
+                ᛞ {selectedAgent.customName.toUpperCase()} DOMAIN DASHBOARD
+              </Text>
+              {renderActiveDashboard()}
+            </View>
+          ) : null}
+
           {statusMessage ? (
             <View style={styles.statusBox}>
               <Text style={styles.statusBoxText}>{statusMessage}</Text>
@@ -378,6 +640,7 @@ export default function App() {
         onClose={() => setIsScannerOpen(false)}
         onScanComplete={() => {
           refreshHomeHubData();
+          refreshDomainData();
           setStatusMessage('Document scanned and processed into vault.');
         }}
       />
@@ -510,6 +773,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderWidth: 1,
     borderColor: '#1F2C42',
+    marginBottom: 20,
   },
   responseContainer: {
     backgroundColor: '#0E1724',
@@ -564,6 +828,17 @@ const styles = StyleSheet.create({
   },
   textWhite: {
     color: '#FFF',
+  },
+  dashboardContainer: {
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  dashboardHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#00E5FF',
+    letterSpacing: 1.5,
+    marginBottom: 12,
   },
   statusText: {
     marginTop: 16,
