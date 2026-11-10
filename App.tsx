@@ -22,7 +22,9 @@ import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
 import { AgentStudioModal } from './src/components/AgentStudioModal';
 import { CameraScannerModal } from './src/components/CameraScannerModal';
 import { FloatingQuickTalkHud } from './src/components/FloatingQuickTalkHud';
+import { UpdateNotificationModal } from './src/components/UpdateNotificationModal';
 import { widgetDeeplinkBridge } from './src/services/WidgetDeeplinkBridge';
+import { appUpdaterService, AppReleaseInfo } from './src/services/AppUpdaterService';
 import { HomeScreenHub, UrgentNoticeItem, ActivityRingsSummary } from './src/components/HomeScreenHub';
 import { AgentManifest } from './src/agents/AgentManifest';
 import { butlerAgent, CalendarEvent, ButlerReminder } from './src/agents/ButlerAgentService';
@@ -50,6 +52,8 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [updateRelease, setUpdateRelease] = useState<AppReleaseInfo | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   // Home Hub Live States
   const [notices, setNotices] = useState<UrgentNoticeItem[]>([]);
@@ -111,6 +115,14 @@ export default function App() {
 
   useEffect(() => {
     jobQueue.startQueueWorker(2000);
+
+    // Check for latest OTA / Nightly APK update
+    appUpdaterService.checkForUpdates().then((release) => {
+      if (release && release.isNewer) {
+        setUpdateRelease(release);
+        setIsUpdateModalOpen(true);
+      }
+    });
 
     // Initialize OS Widget Deep Link Bridge
     widgetDeeplinkBridge.initDeeplinkListener((params) => {
@@ -682,6 +694,13 @@ export default function App() {
           statusMessage={statusMessage}
         />
       ) : null}
+
+      {/* In-App Auto-Update Notification Modal */}
+      <UpdateNotificationModal
+        visible={isUpdateModalOpen}
+        releaseInfo={updateRelease}
+        onClose={() => setIsUpdateModalOpen(false)}
+      />
     </SafeAreaView>
   );
 }
