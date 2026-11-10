@@ -22,6 +22,7 @@ import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
 import { AgentStudioModal } from './src/components/AgentStudioModal';
 import { CameraScannerModal } from './src/components/CameraScannerModal';
 import { FloatingQuickTalkHud } from './src/components/FloatingQuickTalkHud';
+import { widgetDeeplinkBridge } from './src/services/WidgetDeeplinkBridge';
 import { HomeScreenHub, UrgentNoticeItem, ActivityRingsSummary } from './src/components/HomeScreenHub';
 import { AgentManifest } from './src/agents/AgentManifest';
 import { butlerAgent, CalendarEvent, ButlerReminder } from './src/agents/ButlerAgentService';
@@ -110,10 +111,28 @@ export default function App() {
 
   useEffect(() => {
     jobQueue.startQueueWorker(2000);
+
+    // Initialize OS Widget Deep Link Bridge
+    widgetDeeplinkBridge.initDeeplinkListener((params) => {
+      if (params.action === 'quick_talk') {
+        setStatusMessage('🎙️ Launched from Android Home Screen Widget');
+        if (params.agentId) {
+          const match = agents.find((a) => a.id.toLowerCase().includes(params.agentId!.toLowerCase()));
+          if (match) setSelectedAgent(match);
+        }
+        // Auto trigger recording if vault unlocked
+        if (isUnlocked) {
+          handleToggleVoice();
+        }
+      } else if (params.action === 'scan_receipt') {
+        setIsScannerOpen(true);
+      }
+    });
+
     return () => {
       jobQueue.stopQueueWorker();
     };
-  }, []);
+  }, [isUnlocked, agents]);
 
   const handleUnlock = async () => {
     setLoading(true);
