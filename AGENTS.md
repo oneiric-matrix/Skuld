@@ -1,5 +1,14 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+## Git Workflow & Branching Enforcement
+
+This project strictly adheres to the **Oneiric Git Branching Rules** located in `.agents/rules/BRANCHING.md`.
+
+- **NEVER** commit or push directly to `main`, `nightly`, `integration`, `quality`, or `unit`.
+- All development work, bugfixes, and refactors MUST take place on a dedicated `dev/*` branch created directly from `unit` (`git checkout -b dev/<feature-name> unit`).
+- Merges into `unit` must be done exclusively via a Pull Request once unit tests (100% path coverage) pass.
+- Progressing code beyond `unit` (`unit` -> `quality` -> `integration` -> `nightly` -> `main`) requires EXPLICIT user instruction and confirmation. Never promote branches automatically.
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
