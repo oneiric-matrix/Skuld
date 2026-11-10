@@ -11,6 +11,19 @@ export const colors = {
   surfaceElevated: '#1a1a28', // Modals / Sheets
   surfaceSubtle: '#161622', // Subtle list item backgrounds
 
+  // Aliases for Nordic palette
+  midnightObsidian: '#0a0a12',
+  cardSlate: '#12121c',
+  cardElevated: '#1a1a28',
+  cardBorder: '#1e1e2d',
+  glacialCyan: '#00e5ff',
+  frostSilver: '#dce4ec',
+  slateMuted: '#64748b',
+  runicGold: '#fbbf24',
+  emeraldGreen: '#10b981',
+  dangerRed: '#ef4444',
+  amberWarning: '#f59e0b',
+
   // Borders & Dividers
   border: '#1e1e2d', // Micro-stroke border
   borderHighlighted: '#2e3048', // Focused / hovered border
@@ -70,6 +83,26 @@ export const typography = {
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
+
+  // Helper typography styles for direct spread in StyleSheet
+  title: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700' as const,
+    color: '#f8fafc',
+  },
+  bodyStyle: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400' as const,
+    color: '#cbd5e1',
+  },
+  captionStyle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400' as const,
+    color: '#64748b',
+  },
 };
 
 export const borderRadius = {
@@ -79,9 +112,11 @@ export const borderRadius = {
   lg: 16,
   xl: 20,
   full: 9999,
+  round: 9999,
 };
 
 export const touchTargets = {
+  min: 44,
   minTouchArea: 44, // Minimum 44x44px per WCAG / iOS Human Interface
   iconButtonSize: 48,
   hudButtonSize: 52,
