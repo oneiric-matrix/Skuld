@@ -10,10 +10,18 @@ const StyleSheet = {
   absoluteFillObject: {},
 };
 
+const Linking = {
+  getInitialURL: jest.fn().mockResolvedValue(null),
+  addEventListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
+  canOpenURL: jest.fn().mockResolvedValue(true),
+  openURL: jest.fn().mockResolvedValue(true),
+};
+
 module.exports = {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Linking,
 };
