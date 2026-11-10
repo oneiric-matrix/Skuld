@@ -20,7 +20,13 @@ import { localLLM } from './src/ai/LocalLLMEngine';
 import { streamingTTS } from './src/ai/StreamingTTSEngine';
 import { AnimatedAvatarStage } from './src/components/AnimatedAvatarStage';
 import { AgentStudioModal } from './src/components/AgentStudioModal';
+import { CameraScannerModal } from './src/components/CameraScannerModal';
+import { HomeScreenHub, UrgentNoticeItem, ActivityRingsSummary } from './src/components/HomeScreenHub';
 import { AgentManifest } from './src/agents/AgentManifest';
+import { butlerAgent } from './src/agents/ButlerAgentService';
+import { healthAgent } from './src/agents/HealthService';
+import { accountsAgent } from './src/agents/AccountsService';
+import { projectManagerAgent } from './src/agents/ProjectManagerService';
 
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -30,6 +36,19 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Home Hub Live States
+  const [notices, setNotices] = useState<UrgentNoticeItem[]>([]);
+  const [vitalsSummary, setVitalsSummary] = useState<ActivityRingsSummary>({
+    stepsCount: 0,
+    stepsGoal: 10000,
+    hydrationMl: 0,
+    hydrationGoalMl: 2500,
+    dueTasksCount: 0,
+    upcomingBillsCount: 0,
+  });
+  const [dailyBriefing, setDailyBriefing] = useState('');
 
   // AI Pipeline State
   const [isRecording, setIsRecording] = useState(false);
@@ -68,6 +87,86 @@ export default function App() {
     setAgents(roster);
     if (roster.length > 0 && !selectedAgent) {
       setSelectedAgent(roster[0]);
+    }
+    await refreshHomeHubData();
+  };
+
+  const refreshHomeHubData = async () => {
+    try {
+      // 1. Fetch live daily briefing
+      const briefing = await butlerAgent.generateDailyBriefing();
+      setDailyBriefing(briefing);
+
+      // 2. Fetch live vitals
+      const vitals = healthAgent.getDailyVitals();
+      const bills = accountsAgent.getUpcomingBills(7);
+      const pendingTasks = projectManagerAgent.getTasksForProject('').filter(t => t.status !== 'done');
+
+      setVitalsSummary({
+        stepsCount: vitals.steps,
+        stepsGoal: 10000,
+        hydrationMl: vitals.hydrationMl,
+        hydrationGoalMl: vitals.hydrationGoalMl,
+        dueTasksCount: pendingTasks.length,
+        upcomingBillsCount: bills.length,
+      });
+
+      // 3. Compile urgent notices
+      const urgentList: UrgentNoticeItem[] = [];
+
+      // Check for urgent medication due today
+      const meds = healthAgent.getMedications();
+      for (const m of meds) {
+        if (!m.lastTakenTimestamp) {
+          urgentList.push({
+            id: `notice_med_${m.id}`,
+            category: 'medication',
+            title: `Take ${m.name}`,
+            subtitle: `Dosage: ${m.dosage} • Scheduled for ${m.timeOfDay}`,
+            dueText: 'DUE TODAY',
+            priority: 'urgent',
+            targetAgentId: 'health',
+          });
+        }
+      }
+
+      // Check upcoming bills due in next 48h
+      for (const b of bills) {
+        const daysLeft = Math.round((b.nextDueDate - Date.now()) / 86400000);
+        if (daysLeft <= 2) {
+          urgentList.push({
+            id: `notice_bill_${b.id}`,
+            category: 'bill',
+            title: `${b.name} Due`,
+            subtitle: `${b.currency} ${b.amount.toFixed(2)} due soon`,
+            dueText: daysLeft <= 0 ? 'DUE TODAY' : `IN ${daysLeft}D`,
+            priority: 'urgent',
+            targetAgentId: 'accounts',
+          });
+        }
+      }
+
+      // Check upcoming calendar events in next 2 hours
+      const upcomingEvents = butlerAgent.getUpcomingEvents();
+      if (upcomingEvents.length > 0) {
+        const nextEvt = upcomingEvents[0];
+        const minsUntil = Math.round((nextEvt.startTime - Date.now()) / 60000);
+        if (minsUntil <= 120 && minsUntil >= -30) {
+          urgentList.push({
+            id: `notice_evt_${nextEvt.id}`,
+            category: 'calendar',
+            title: nextEvt.title,
+            subtitle: nextEvt.location ? `Location: ${nextEvt.location}` : 'Upcoming calendar event',
+            dueText: minsUntil <= 0 ? 'NOW' : `IN ${minsUntil}M`,
+            priority: minsUntil <= 15 ? 'urgent' : 'high',
+            targetAgentId: 'butler',
+          });
+        }
+      }
+
+      setNotices(urgentList);
+    } catch {
+      // Non-blocking fallback
     }
   };
 
@@ -174,6 +273,19 @@ export default function App() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {/* URGENT HIGHLIGHTS & GLANCEABLE HOME HUB */}
+          <HomeScreenHub
+            notices={notices}
+            vitals={vitalsSummary}
+            dailyBriefingText={dailyBriefing}
+            onSelectAgent={(agentId) => {
+              const match = agents.find((a) => a.id.toLowerCase().includes(agentId.toLowerCase()));
+              if (match) setSelectedAgent(match);
+            }}
+            onOpenScanner={() => setIsScannerOpen(true)}
+            onOpenStudio={() => setIsStudioOpen(true)}
+          />
+
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Agent Roster</Text>
             <TouchableOpacity onPress={() => setIsStudioOpen(true)}>
@@ -258,6 +370,16 @@ export default function App() {
         visible={isStudioOpen}
         onClose={() => setIsStudioOpen(false)}
         onAgentCreated={handleAgentCreated}
+      />
+
+      {/* Instant Camera Scanner HUD */}
+      <CameraScannerModal
+        visible={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={() => {
+          refreshHomeHubData();
+          setStatusMessage('Document scanned and processed into vault.');
+        }}
       />
     </SafeAreaView>
   );
