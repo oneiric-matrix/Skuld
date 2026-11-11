@@ -24,7 +24,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-sqlite",
-      "./plugins/withAndroidQuickTalkWidget"
+      "./plugins/withAndroidQuickTalkWidget",
+      "./plugins/withCustomProguardRules"
     ]
   }
 }
