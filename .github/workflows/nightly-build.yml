@@ -54,15 +54,41 @@ jobs:
         run: |
           mkdir -p build-output
           find android/app/build/outputs/apk -name "*.apk" -exec cp {} build-output/Skuld-Nightly.apk \;
+          echo "BUILD_TIMESTAMP=$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_ENV
+          echo "GIT_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Skuld-Nightly-APK
+          name: Skuld-Nightly-APK-${{ env.GIT_SHORT_SHA }}
           path: build-output/Skuld-Nightly.apk
           retention-days: 14
 
-      - name: Publish Nightly GitHub Release
+      - name: Publish Versioned GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: nightly-${{ env.BUILD_TIMESTAMP }}
+          name: "Skuld Nightly Build (${{ env.BUILD_TIMESTAMP }})"
+          draft: false
+          prerelease: true
+          make_latest: true
+          body: |
+            ### 📱 Skuld Nightly Standalone APK — `${{ env.BUILD_TIMESTAMP }}`
+
+            - Commit: `${{ env.GIT_SHORT_SHA }}`
+            - Source Branch: `nightly`
+
+            #### How to Install on Your Phone:
+            1. Download **`Skuld-Nightly.apk`** below on your Android device.
+            2. Open the file and tap **Install** (Allow installation from browser if prompted).
+            3. Open Skuld and authenticate with your biometric passcode to unlock your Hardware Vault.
+            4. Add the **Skuld Quick Talk Widget** to your home screen!
+          files: build-output/Skuld-Nightly.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Floating Latest Release Tag
         uses: softprops/action-gh-release@v2
         if: success()
         with:
@@ -72,9 +98,9 @@ jobs:
           prerelease: true
           make_latest: false
           body: |
-            ### 📱 Skuld Nightly Standalone APK
+            ### 📱 Skuld Nightly Standalone APK (Always Latest)
 
-            This release was automatically compiled from branch `nightly`.
+            - Last Updated: `${{ env.BUILD_TIMESTAMP }}` (`${{ env.GIT_SHORT_SHA }}`)
 
             #### How to Install on Your Phone:
             1. Download **`Skuld-Nightly.apk`** below on your Android device.
