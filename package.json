@@ -1,7 +1,7 @@
 {
   "name": "skuld-app",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "index.tsx",
   "dependencies": {
     "expo": "~58.0.21",
     "expo-av": "^16.0.8",
@@ -22,8 +22,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --passWithNoTests"
   },
