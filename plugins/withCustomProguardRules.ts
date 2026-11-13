@@ -1,14 +1,58 @@
-import { ConfigPlugin, withDangerousMod } from '@expo/config-plugins';
+import { ConfigPlugin, withDangerousMod, withGradleProperties } from '@expo/config-plugins';
 import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Expo Config Plugin to inject ProGuard / R8 rules for Skuld native dependencies
- * Resolves missing classes and ensures all Expo modules, SQLite, SecureStore, and LocalAuth
- * classes are kept without aggressive obfuscation breaking reflection.
+ * Expo Config Plugin to manage ProGuard / R8 and Gradle configuration:
+ * 1. Disables aggressive R8 release minification (`android.enableMinifyInReleaseBuilds=false`)
+ *    which causes native crashes in standalone APKs due to missing reflection targets.
+ * 2. Injects comprehensive ProGuard / R8 keep rules to protect Expo modules and providers.
  */
 export const withCustomProguardRules: ConfigPlugin = (config) => {
-  return withDangerousMod(config, [
+  // 1. Disable R8 minification in gradle.properties
+  config = withGradleProperties(config, (modConfig) => {
+    // Set or update android.enableMinifyInReleaseBuilds to false
+    const existingIndex = modConfig.modResults.findIndex(
+      (item) => item.type === 'property' && item.key === 'android.enableMinifyInReleaseBuilds'
+    );
+
+    if (existingIndex !== -1) {
+      modConfig.modResults[existingIndex] = {
+        type: 'property',
+        key: 'android.enableMinifyInReleaseBuilds',
+        value: 'false',
+      };
+    } else {
+      modConfig.modResults.push({
+        type: 'property',
+        key: 'android.enableMinifyInReleaseBuilds',
+        value: 'false',
+      });
+    }
+
+    // Also disable shrinkResources
+    const shrinkIndex = modConfig.modResults.findIndex(
+      (item) => item.type === 'property' && item.key === 'android.enableShrinkResourcesInReleaseBuilds'
+    );
+    if (shrinkIndex !== -1) {
+      modConfig.modResults[shrinkIndex] = {
+        type: 'property',
+        key: 'android.enableShrinkResourcesInReleaseBuilds',
+        value: 'false',
+      };
+    } else {
+      modConfig.modResults.push({
+        type: 'property',
+        key: 'android.enableShrinkResourcesInReleaseBuilds',
+        value: 'false',
+      });
+    }
+
+    return modConfig;
+  });
+
+  // 2. Dangerous mod to inject ProGuard keep rules for safety
+  config = withDangerousMod(config, [
     'android',
     async (modConfig) => {
       const proguardPath = path.join(
@@ -42,6 +86,8 @@ export const withCustomProguardRules: ConfigPlugin = (config) => {
       return modConfig;
     },
   ]);
+
+  return config;
 };
 
 export default withCustomProguardRules;
