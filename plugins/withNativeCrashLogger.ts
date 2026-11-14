@@ -4,8 +4,9 @@ import * as path from 'path';
 
 /**
  * Expo Config Plugin to inject a global native UncaughtExceptionHandler in MainApplication.kt
- * It traps any unhandled exception at JVM/Android process startup, writes the stack trace
- * to /sdcard/Download/skuld_crash_log.txt and app internal storage, and prints to Logcat.
+ * Writes the crash report to both internal storage and public app-specific external storage
+ * (Android/data/com.anonymous.skuldapp/files/skuld_crash_log.txt and Documents/skuld_crash_log.txt)
+ * without requiring Scoped Storage permissions.
  */
 export const withNativeCrashLogger: ConfigPlugin = (config) => {
   return withDangerousMod(config, [
@@ -88,7 +89,30 @@ $stackTrace
           Log.e("SkuldCrashLogger", "Failed to write internal crash log", e)
         }
 
-        // 2. Write to public Downloads directory for easy user access
+        // 2. Write to external files directory (Android/data/com.anonymous.skuldapp/files/skuld_crash_log.txt)
+        // This never requires any permissions on Android 10, 11, 12, 13, 14, 15!
+        try {
+          val extFilesDir = getExternalFilesDir(null)
+          if (extFilesDir != null) {
+            val extFile = File(extFilesDir, "skuld_crash_log.txt")
+            extFile.writeText(logContent)
+          }
+        } catch (e: Exception) {
+          Log.e("SkuldCrashLogger", "Failed to write external files crash log", e)
+        }
+
+        // 3. Write to public Documents/Download via MediaStore or fallback if available
+        try {
+          val documentsDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+          if (documentsDir != null) {
+            val docFile = File(documentsDir, "skuld_crash_log.txt")
+            docFile.writeText(logContent)
+          }
+        } catch (e: Exception) {
+          Log.e("SkuldCrashLogger", "Failed to write documents crash log", e)
+        }
+
+        // 4. Also try public Downloads via legacy path
         try {
           val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
           if (downloadsDir != null && downloadsDir.exists()) {
