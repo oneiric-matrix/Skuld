@@ -27,7 +27,9 @@
       "expo-sqlite",
       "./plugins/withAndroidQuickTalkWidget",
       "./plugins/withCustomProguardRules",
-      "./plugins/withNativeCrashLogger"
+      "./plugins/withNativeCrashLogger",
+      "expo-asset",
+      "expo-status-bar"
     ]
   }
 }
