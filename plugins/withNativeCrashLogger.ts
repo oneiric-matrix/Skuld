@@ -43,11 +43,15 @@ export const withNativeCrashLogger: ConfigPlugin = (config) => {
 
       // Add helper imports
       const importsToAdd = `
+import android.content.Intent
+import android.net.Uri
 import android.os.Environment
 import android.util.Log
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -121,6 +125,19 @@ $stackTrace
           }
         } catch (e: Exception) {
           Log.e("SkuldCrashLogger", "Failed to write public crash log", e)
+        }
+
+        // 5. Direct Dispatch to Email via Android Intent (mailto:oneiricpilgrim@gmail.com)
+        try {
+          val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:oneiricpilgrim@gmail.com")
+            putExtra(Intent.EXTRA_SUBJECT, "⚡ Skuld Crash Report: \${throwable.javaClass.simpleName}")
+            putExtra(Intent.EXTRA_TEXT, logContent)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          }
+          startActivity(emailIntent)
+        } catch (emailErr: Exception) {
+          Log.e("SkuldCrashLogger", "Failed to launch email intent", emailErr)
         }
       } catch (fatal: Throwable) {
         Log.e("SkuldCrashLogger", "Fatal error in crash handler", fatal)
