@@ -4,7 +4,7 @@
   "main": "index.tsx",
   "dependencies": {
     "expo": "~58.0.21",
-    "expo-av": "^16.0.8",
+    "expo-audio": "~58.0.12",
     "expo-crypto": "~58.0.7",
     "expo-local-authentication": "~58.0.2",
     "expo-secure-store": "~58.0.2",
