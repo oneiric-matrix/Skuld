@@ -114,35 +114,57 @@ export default function App() {
   const [timers, setTimers] = useState<ActiveKitchenTimer[]>([]);
 
   useEffect(() => {
-    jobQueue.startQueueWorker(2000);
+    try {
+      jobQueue.startQueueWorker(2000);
+    } catch (e) {
+      console.warn('Failed to start job queue worker:', e);
+    }
 
     // Check for latest OTA / Nightly APK update
-    appUpdaterService.checkForUpdates().then((release) => {
-      if (release && release.isNewer) {
-        setUpdateRelease(release);
-        setIsUpdateModalOpen(true);
-      }
-    });
+    try {
+      appUpdaterService.checkForUpdates().then((release) => {
+        if (release && release.isNewer) {
+          setUpdateRelease(release);
+          setIsUpdateModalOpen(true);
+        }
+      }).catch((e) => {
+        console.warn('Update check failed non-fatally:', e);
+      });
+    } catch (e) {
+      console.warn('AppUpdaterService error:', e);
+    }
 
     // Initialize OS Widget Deep Link Bridge
-    widgetDeeplinkBridge.initDeeplinkListener((params) => {
-      if (params.action === 'quick_talk') {
-        setStatusMessage('🎙️ Launched from Android Home Screen Widget');
-        if (params.agentId) {
-          const match = agents.find((a) => a.id.toLowerCase().includes(params.agentId!.toLowerCase()));
-          if (match) setSelectedAgent(match);
+    try {
+      widgetDeeplinkBridge.initDeeplinkListener((params) => {
+        try {
+          if (params.action === 'quick_talk') {
+            setStatusMessage('🎙️ Launched from Android Home Screen Widget');
+            if (params.agentId) {
+              const match = agents.find((a) => a.id.toLowerCase().includes(params.agentId!.toLowerCase()));
+              if (match) setSelectedAgent(match);
+            }
+            // Auto trigger recording if vault unlocked
+            if (isUnlocked) {
+              handleToggleVoice();
+            }
+          } else if (params.action === 'scan_receipt') {
+            setIsScannerOpen(true);
+          }
+        } catch (innerErr) {
+          console.warn('Widget deeplink handler error:', innerErr);
         }
-        // Auto trigger recording if vault unlocked
-        if (isUnlocked) {
-          handleToggleVoice();
-        }
-      } else if (params.action === 'scan_receipt') {
-        setIsScannerOpen(true);
-      }
-    });
+      }).catch((e) => {
+        console.warn('Deeplink listener init failed non-fatally:', e);
+      });
+    } catch (e) {
+      console.warn('Widget bridge initialization error:', e);
+    }
 
     return () => {
-      jobQueue.stopQueueWorker();
+      try {
+        jobQueue.stopQueueWorker();
+      } catch (e) {}
     };
   }, [isUnlocked, agents]);
 
