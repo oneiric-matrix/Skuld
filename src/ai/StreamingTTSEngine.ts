@@ -1,4 +1,3 @@
-import { Audio } from 'expo-av';
 import { VoiceProfileConfig } from '../agents/AgentManifest';
 
 export interface VisemeFrame {
@@ -11,12 +10,11 @@ export type VisemeListener = (frame: VisemeFrame) => void;
 
 /**
  * Local Streaming TTS Engine (Piper ONNX VITS architecture).
- * Accepts clause chunks from the LLM engine in real-time and plays audio
+ * Accepts clause chunks from the LLM engine in real-time and coordinates audio
  * while driving the viseme mouth flap stream for animated avatars.
  */
 export class StreamingTTSEngine {
   private static instance: StreamingTTSEngine | null = null;
-  private currentSound: Audio.Sound | null = null;
   private isSpeaking = false;
   private visemeListeners: VisemeListener[] = [];
   private speechQueue: string[] = [];
